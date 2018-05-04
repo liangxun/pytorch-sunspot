@@ -11,28 +11,32 @@ class DataPreprocess(object):
         self.dim = dim
         table = pd.read_csv(filename, index_col='Date')
         data = np.array(table['sunspot_ms'])
-        sequence_length = seq_len + 1
-        train = []
-        for index in range(row - sequence_length):
-            tmp = data[index: index + sequence_length]
-            train.append(tmp)
-        train = np.array(train)
+        print('len(data):'.format(len(data)))
+        self.max = max(data)
+        self.min = min(data)
+        data = (data-self.min)/(self.max-self.min)
+        x_train = []
+        y_train = []
+        for index in range(row - seq_len):
+            x_train.append(data[index: index + seq_len])
+            y_train.append(data[index+1:index+1+seq_len])
         print("train set的长度：", row)
-        x_train = train[:, :-1]
-        y_train = train[:, -1]
+        x_train = np.array(x_train)
+        y_train = np.array(y_train)
         x_test = data[row-seq_len:]
         y_test = data[row:]
         print("test set的长度：", len(y_test))
-        x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
-        y_train = y_train[:,np.newaxis]
+        #x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
+        #y_train = y_train[:,:,np.newaxis]
+        x_test = x_test[:,np.newaxis]
         print("x_train.shape{}\ty_train.shape{}\nx_test.shape{}\ty_test.shape{}\n".format(
             x_train.shape, y_train.shape, x_test.shape, y_test.shape))
         return [x_train, y_train, x_test, y_test]
 
 
     def recover(self, data):
-
-        return data
+        recovered_data = [p * (self.max - self.min) + self.min for p in data]
+        return recovered_data
 
 
 '''
@@ -100,7 +104,7 @@ if __name__ == '__main__':
     DataLoader = DataPreprocess()
     #x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, 50)
     #data, (train,test) = DataLoader.arima_load_data(datapath,50)
-    x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, 50)
+    x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, 200)
     show(y_train)
     show(y_test)
-    #show(DataLoader.recover(y_test))
+    show(DataLoader.recover(y_test))
