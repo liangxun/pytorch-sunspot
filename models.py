@@ -25,16 +25,17 @@ class rnncell(nn.Module):
         return out,hidden
 
 class lstm(nn.Module):
-    def __init__(self,input_dim,layers):
+    def __init__(self,input_dim,layers,num_layers=1):
         super(lstm, self).__init__()
         self.name = 'lstm'
-        self.lstm = nn.LSTM(input_size=input_dim, hidden_size=layers[0],num_layers=1,batch_first=True)
+        self.lstm = nn.LSTM(input_size=input_dim, hidden_size=layers[0],num_layers=num_layers,batch_first=True)
         self.out = nn.Linear(in_features=layers[0],out_features=layers[1])
 
     def forward(self, input):
         x, hidden = self.lstm(input)
-        out = self.out(x)
+        out = self.out(x[:,-1,:])
         return out
+
 
 class lstmcell(nn.Module):
     def __init__(self, input_dim,layers):
