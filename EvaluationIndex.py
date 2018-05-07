@@ -1,4 +1,5 @@
 import numpy as np
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 让图例正常显示中文
 plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
@@ -49,8 +50,13 @@ class evalueationIndex(object):
         plt.legend()
         plt.show()
 
-
     def plot_ape(self):
         plt.plot(self.ape, label='百分绝对预测误差')
         plt.legend()
         plt.show()
+
+    def correlation(self):
+        plot_acf(self.e, lags=50)
+        plot_pacf(self.e, lags=50)
+        plt.show()
+

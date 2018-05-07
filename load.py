@@ -3,76 +3,50 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-class DataPreprocess(object):
+class DataPreprocess2(object):
+    """对每个样本归一化到（均值0，标准差1）"""
     def __init__(self):
         pass
 
-    def lstm_load_data(self, filename, seq_len, dim=1, row=1686):
+    def lstm_load_data(self, filename, seq_len, ahead=1, dim=1, row=1500):
+        """
+        :param filename: 数据集
+        :param seq_len: 输入序列的时间步
+        :param ahead: 预测序列的时间步
+        :param dim: 输入特征的维度
+        :param row: 划分训练集和测试集的地方
+        :return: 数据集，测试集
+        """
         self.dim = dim
-        table = pd.read_csv(filename, index_col='Date')
-        data = np.array(table['sunspot_ms'])
-        sequence_length = seq_len + 1
-        train = []
-        for index in range(row - sequence_length):
-            tmp = data[index: index + sequence_length]
-            train.append(tmp)
-        train = np.array(train)
-        print("train set的长度：", row)
-        x_train = train[:, :-1]
-        y_train = train[:, -1]
-        x_test = data[row-seq_len:]
-        y_test = data[row:]
-        print("test set的长度：", len(y_test))
-        x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
-        y_train = y_train[:,np.newaxis]
-        print("x_train.shape{}\ty_train.shape{}\nx_test.shape{}\ty_test.shape{}\n".format(
-            x_train.shape, y_train.shape, x_test.shape, y_test.shape))
-        return [x_train, y_train, x_test, y_test]
-
-
-    def recover(self, data):
-
-        return data
-
-
-'''
-class DataPreprocess(object):
-    def __init__(self):
-        pass
-
-    def lstm_load_multidata(self, filename, seq_len, dim=2, row=1686):
-        """LSTM多特征输入"""
-        self.mode = 'lstm_dim{}'.format(dim)
-        self.dim = dim
-        table = pd.read_csv(filename, index_col='Date')
-        # 定位收盘价所在列
-        self.col_sunspot = table.columns.get_loc('sunspot_ms')
-        sequence_length = seq_len + 1
+        df = pd.read_csv(filename, index_col='Date')
+        self.col_index = df.columns.get_loc('sunspot_ms')
+        print('len(data):'.format(len(df)))
+        # 相空间重构和归一化同时进行
+        sequence_length = seq_len + ahead
         result = []
-        info = []
-        """求mean和std时只用到输入部分"""
-        for index in range(len(table) - sequence_length):
-            data = table[index: index + sequence_length]
-            mean = np.mean(data[:-1])
-            std = np.std(data[:-1])
+        self.info = []
+        for index in range(len(df)-sequence_length):
+            data = df[index:index+sequence_length]
+            mean = np.mean(data[:-ahead])
+            std = np.std(data[:-ahead])
             data = (data - mean)/std
-            info.append((mean[self.col_sunspot], std[self.col_sunspot]))
             result.append(data.values)
-        print("相空间重构后数据集的长度：", len(result))
+            #self.info.append((mean[self.col_index],std[self.col_index]))
+            self.info.append((mean,std))
         result = np.array(result)
-        train = result[:row, :]
         print("train set的长度：", row)
-        # 输入多维特征，但输出依旧是只有sunspot_ms一维
-        x_train = train[:, :-1]
-        y_train = train[:, -1, self.col_sunspot]
-        x_test = result[row:, :-1]
-        y_test = result[row:, -1, self.col_sunspot]
-        self.testinfo = info[row:]
+        print(self.dim)
+        x_train = result[:row, :-ahead]
+        x_test = result[row:,:-ahead]
+        if self.dim is 1:
+            x_train = x_train[:, :, np.newaxis, self.col_index]
+            x_test = x_test[:, :, np.newaxis, self.col_index]
+        y_train = result[:row, -ahead:, self.col_index]
+        y_test = result[row:, -ahead:, self.col_index]
+        self.testinfo = self.info[row:]
         print("test set的长度：", len(y_test))
-        x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
-        x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], dim))
-        y_train = y_train[:,np.newaxis]
-        # y_test = y_test[:,np.newaxis]
+        #x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
+        #y_train = y_train[:,:,np.newaxis]
         print("x_train.shape{}\ty_train.shape{}\nx_test.shape{}\ty_test.shape{}\n".format(
             x_train.shape, y_train.shape, x_test.shape, y_test.shape))
         return [x_train, y_train, x_test, y_test]
@@ -83,7 +57,59 @@ class DataPreprocess(object):
         for i in range(len(data)):
             data[i] = data[i] * info[i][1] + info[i][0]
         return data
-'''''
+
+class DataPreprocess(object):
+    """对所有数据归一化到（0,1）"""
+    def __init__(self):
+        pass
+
+    def lstm_load_data(self, filename, seq_len, ahead=1, dim=1, row=1500):
+        """
+        :param filename: 数据集
+        :param seq_len: 输入序列的时间步
+        :param ahead: 预测序列的时间步
+        :param dim: 输入特征的维度
+        :param row: 划分训练集和测试集的地方
+        :return: 数据集，测试集
+        """
+        self.dim = dim
+        df = pd.read_csv(filename, index_col='Date')
+        #
+        self.col_index = df.columns.get_loc('sunspot_ms')
+        data = df.values
+        print('len(data):'.format(len(data)))
+        self.max = data.max(axis=0)
+        self.min = data.min(axis=0)
+        data = (data-self.min)/(self.max-self.min)
+        # 相空间重构
+        sequence_length = seq_len + ahead
+        result = []
+        for index in range(len(data)-sequence_length):
+            result.append(data[index:index+sequence_length])
+        result = np.array(result)
+        print("train set的长度：", row)
+        print(self.dim)
+        x_train = result[:row, :-ahead]
+        x_test = result[row:,:-ahead]
+        if self.dim is 1:
+            x_train = x_train[:, :, np.newaxis, self.col_index]
+            x_test = x_test[:, :, np.newaxis, self.col_index]
+        y_train = result[:row, -ahead:, self.col_index]
+        y_test = result[row:, -ahead:, self.col_index]
+        print("test set的长度：", len(y_test))
+        #x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], dim))
+        #y_train = y_train[:,:,np.newaxis]
+        print("x_train.shape{}\ty_train.shape{}\nx_test.shape{}\ty_test.shape{}\n".format(
+            x_train.shape, y_train.shape, x_test.shape, y_test.shape))
+        return [x_train, y_train, x_test, y_test]
+
+
+    def recover(self, data):
+        max = self.max[self.col_index]
+        min = self.min[self.col_index]
+        recovered_data = [p*(max-min)+min for p in data]
+        return recovered_data
+
 
 def show(data,label='data'):
     plt.figure()
@@ -95,12 +121,13 @@ def show(data,label='data'):
 
 if __name__ == '__main__':
     dim = 2
+    timesteps = 129
     datapath = './sunspot_ms_dim{}.csv'.format(dim)
     print('> Loading data... ')
-    DataLoader = DataPreprocess()
+    DataLoader = DataPreprocess2()
     #x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, 50)
     #data, (train,test) = DataLoader.arima_load_data(datapath,50)
-    x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, 50)
-    show(y_train)
-    show(y_test)
-    #show(DataLoader.recover(y_test))
+    x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(datapath, timesteps,ahead=1,dim=2,row=1686-timesteps)
+    data = np.vstack((y_train,y_test))
+    show(data)
+    show(DataLoader.recover(y_test))
