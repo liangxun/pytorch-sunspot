@@ -4,31 +4,30 @@ import torch.nn as nn
 import torch.utils.data as Data
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import models
 import load
 import EvaluationIndex
 
 
-#hyperparams
-timesteps = 42
+# hyperparams
+timesteps = 10
 dim = 2
-epochs = 50
+epochs = 10
 lr = 0.001
 batchsize = 128
-ahead = 3
+ahead = 1
 layers = [32,ahead]
 datapath = './sunspot_ms_dim{}.csv'.format(2)
-modelpath = './{}_step{}_dim{}_rmse{:.3f}.pt'
+modelpath = './models/{}_step{}_dim{}_rmse{:.3f}.pt'
 
 print('>Loading model...')
 # model = models.rnn()
-model = models.lstm(input_dim=dim, layers=layers,num_layers=1)
+model = models.lstm(input_dim=dim, layers=layers,num_layers=2)
 optimizer = optim.RMSprop(model.parameters(), lr=lr)
 loss_func = nn.MSELoss()
 print(model)
 
-#load data
+# load data
 print('> Loading data... ')
 DataLoader = load.DataPreprocess()
 x_train, y_train, x_test, y_test = DataLoader.lstm_load_data(filename=datapath, seq_len=timesteps, ahead=ahead,dim=dim,
@@ -40,6 +39,7 @@ train_loader = Data.DataLoader(
     shuffle=True,
 )
 
+# train model
 log_loss = []
 def train():
     loss_epoch = 0
@@ -72,47 +72,38 @@ def predict(x):
         out = model(inp.view(1,-1,dim))
         prediction.append([a.item() for a in out[0]])
     return prediction
-'''
-#在训练集上预测，看是否欠拟合
-prediction = DataLoader.recover(predict(x_train))
-target = DataLoader.recover(y_train)
-eI = EvaluationIndex.evalueationIndex(prediction,target)
-print("MSE={}\nRMSE={}\nMAPE={}".format(eI.MSE, eI.RMSE, eI.MAPE))
-plt.plot(target,'go-',label='true_data')
-plt.plot(prediction,'bx-',label='prediction')
-plt.legend()
-plt.title('result of {}\nRMSE{:.3f}  MAPE{:.3f}'.format(model.name,eI.RMSE,eI.MAPE))
-plt.show()
-'''
-#在训练集上预测
-pred = pd.DataFrame(predict(x_test))
-pred = pred.append(pd.DataFrame([[0.,0.,0.]]*2),ignore_index=True)
-pred[1] = pred[1].shift(1)
-pred[2] = pred[2].shift(2)
-pred = pred.fillna(0)
 
-prediction= np.array((pred.sum(axis=1)/3)[2:])
+# 对预测结果画图，计算统计指标
+def statistic(prediction, target):
+    eI = EvaluationIndex.evalueationIndex(prediction, target)
+    print("MSE={}\nRMSE={}\nMAPE={}".format(eI.MSE, eI.RMSE, eI.MAPE))
+    plt.plot(target, 'o-', label='true_data')
+    plt.plot(prediction, 'x-', label='prediction')
+    plt.legend()
+    plt.title('result of {}\nRMSE{:.3f}  MAPE{:.3f}'.format(model.name, eI.RMSE, eI.MAPE))
+    plt.show()
+    '''
+    eI.plot_e()
+    eI.plot_ape()
+    eI.correlation()
+    '''
+    return eI
 
+# 在训练集上预测，看是否欠拟合
+prediction = DataLoader.recover(np.squeeze(np.array(predict(x_train))))
+target = DataLoader.recover(np.squeeze(y_train))
+statistic(prediction, target)
 
+# 在测试集上预测，
+prediction = DataLoader.recover(np.squeeze(np.array(predict(x_test))))
+target = DataLoader.recover(np.squeeze(y_test))
+eI = statistic(prediction, target)
 
-
-prediction = DataLoader.recover(prediction)
-target = DataLoader.recover(np.squeeze(y_test[:,-1]))
-
-
-eI = EvaluationIndex.evalueationIndex(prediction,target)
-print("MSE={}\nRMSE={}\nMAPE={}".format(eI.MSE, eI.RMSE, eI.MAPE))
-plt.plot(target,'go-',label='true_data')
-plt.plot(prediction,'bx-',label='prediction')
-plt.legend()
-plt.title('result of {}\nRMSE{:.3f}  MAPE{:.3f}'.format(model.name,eI.RMSE,eI.MAPE))
-plt.show()
-
-#存储训练好的参数和一些超参数信息
+# 存储训练好的参数和一些超参数信息
 torch.save({
     'epoch':epochs+1,
     'timesteps':timesteps,
     'inputdim':dim,
     'optimizer':optimizer.state_dict()['param_groups'][0],
     'state_dict':model.state_dict(),
-},modelpath.format(model.name,timesteps,dim,eI.RMSE))
+}, modelpath.format(model.name,timesteps,dim,eI.RMSE))
